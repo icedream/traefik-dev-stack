@@ -1,0 +1,113 @@
+version: '3.9'
+
+networks:
+  web:
+    external: true
+  dns:
+    ipam:
+      config:
+        - subnet: 10.255.255.0/24
+
+configs:
+  traefik_config.toml:
+    file: configs/traefik/traefik.toml
+
+volumes:
+  step_export: {}
+  step_home: {}
+  traefik_acme: {}
+
+services:
+  # DNS used by stepca to verify that Traefik is allowed to get HTTPS certificates
+  unbound:
+    image: ${CI_REGISTRY_IMAGE:-localhost/traefik-dev-stack}/unbound
+    build: images/unbound
+    restart: always
+    environment:
+      - BASE_DNS_NAME
+      - ADDITIONAL_BASE_DNS_NAMES
+    networks:
+      dns:
+        ipv4_address: 10.255.255.11
+      web: {}
+    healthcheck:
+      interval: 5s
+      timeout: 5s
+      retries: 100
+      start_period: 5s
+
+  # Automated certificate authority for HTTPS
+  stepca:
+    image: ${CI_REGISTRY_IMAGE:-localhost/traefik-dev-stack}/step-ca
+    build: images/step-ca
+    restart: always
+    dns: 10.255.255.11
+    depends_on:
+      - unbound
+    environment:
+      DOCKER_STEPCA_INIT_NAME: ${CA_NAME:-Local Development Setup Certificate Authority}
+      DOCKER_STEPCA_INIT_DNS_NAMES: stepca,stepca.dns,stepca.web,localhost,${CA_DNS_NAME:-dev-ca.localhost}
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: web
+      traefik.http.routers.stepca.rule: Host(`${CA_DNS_NAME}`)
+      traefik.http.routers.stepca.entrypoints: https
+      traefik.http.routers.stepca.tls: "true"
+      traefik.http.routers.stepca.tls.certResolver: stepca
+      traefik.http.services.stepca.loadbalancer.server.port: "9000"
+    volumes:
+      - step_home:/home/step
+      # mount for sharing CA cert with traefik
+      - step_export:/export
+    networks:
+      dns:
+        ipv4_address: 10.255.255.10
+      web: {}
+    healthcheck:
+      interval: 5s
+      timeout: 5s
+      retries: 100
+      start_period: 5s
+
+  # The Traefik frontproxy itself
+  traefik:
+    image: ${CI_REGISTRY_IMAGE:-localhost/traefik-dev-stack}/traefik
+    build: images/traefik
+    restart: always
+    environment:
+      - BASE_DNS_NAME
+    command:
+      - --configfile=/traefik_config.toml
+    configs:
+      - traefik_config.toml
+    labels:
+      # dashboard
+      traefik.enable: "true"
+      traefik.http.routers.traefik-api.rule: Host(`${TRAEFIK_DNS_NAME:-traefik.localhost}`)
+      traefik.http.routers.traefik-api.entryPoints: https
+      traefik.http.routers.traefik-api.tls: true
+      traefik.http.routers.traefik-api.tls.certresolver: stepca
+      traefik.http.routers.traefik-api.service: api@internal
+
+      # redirect all http to https if no explicit http host is defined
+      traefik.http.routers.http-catchall.rule: HostRegexp(`{host:.+}`)
+      traefik.http.routers.http-catchall.entrypoints: http
+      traefik.http.routers.http-catchall.middlewares: redirect-to-https@docker
+      traefik.http.routers.http.catchall.priority: "1"
+      traefik.http.middlewares.redirect-to-https.redirectscheme.scheme: https
+
+      # port is defined to avoid validation error, not actually used
+      traefik.http.services.traefik-placeholder.loadbalancer.server.port: "65534"
+    security_opt:
+      - label=disable
+    ports:
+      - 80:80
+      - 443:443
+      - 8999:8999
+    networks:
+      - web
+    volumes:
+      - ./configs/traefik/dynamic:/traefik.d:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - traefik_acme:/data/acme
+      - step_export:/usr/local/share/ca-certificates

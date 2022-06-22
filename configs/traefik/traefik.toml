@@ -1,0 +1,97 @@
+# traefik.toml
+# Configuration for Traefik v2
+
+################################################################
+# Global configuration
+################################################################
+
+[global]
+  checkNewVersion = false
+  sendAnonymousUsage = false
+
+[log]
+  level = "WARN"
+
+[serversTransport]
+  insecureSkipVerify = true
+  maxIdleConnsPerHost = 0
+
+################################################################
+# Access log configuration
+################################################################
+
+[accessLog]
+  bufferingSize = 0
+
+################################################################
+# Entrypoints configuration
+################################################################
+
+[entryPoints]
+  [entryPoints.http]
+    address = ":80"
+    [entryPoints.http.forwardedHeaders]
+      trustedIPs = ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"]
+  [entryPoints.https]
+    address = ":443"
+    [entryPoints.https.http.tls]
+      certResolver = "stepca"
+    [entryPoints.https.forwardedHeaders]
+      trustedIPs = ["10.0.0.0/8", "192.168.0.0/16", "172.16.0.0/12"]
+  [entryPoints.git-ssh]
+    address = ":8999"
+
+[tls]
+  [tls.options]
+    [tls.options.default]
+      minVersion = "VersionTLS12"
+      cipherSuites = [
+        "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
+        "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+        "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256",
+        "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384",
+        "TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256",
+        "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384",
+        "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305",
+        "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305",
+        "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA",
+        "TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA",
+        "TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA",
+        "TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA",
+      ]
+
+################################################################
+# ACME/Let's Encrypt configuration
+################################################################
+
+[certificatesResolvers.stepca.acme]
+  email = "traefik@localhost"
+  storage = "/data/acme/acme.json"
+  tlsChallenge = true
+  caServer = "https://stepca:9000/acme/acme/directory"
+
+################################################################
+# Web dashboard configuration
+################################################################
+
+[api]
+  insecure = true
+  dashboard = true
+
+################################################################
+# Providers
+################################################################
+
+[providers]
+  providersThrottleDuration = "2s"
+
+  [providers.docker]
+    watch = true
+    exposedByDefault = false
+    defaultRule = "Host(`{{ normalize .Name }}.{{ env \"BASE_DNS_NAME\" }}`)"
+    swarmMode = false
+    network = "web"
+
+  [providers.file]
+   directory = "/traefik.d/"
+   watch = true

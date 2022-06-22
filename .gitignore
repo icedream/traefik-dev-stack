@@ -1,0 +1,5 @@
+*.env
+*.crt
+
+configs/traefik/dynamic/*
+!configs/traefik/dynamic/README*
