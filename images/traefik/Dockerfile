@@ -1,4 +1,4 @@
-FROM traefik:v2.9.10
+FROM traefik:2.10.7
 
 COPY entrypoint.sh /usr/local/bin/custom-entrypoint
 RUN chmod +x /usr/local/bin/custom-entrypoint
