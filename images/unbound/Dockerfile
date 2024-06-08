@@ -1,4 +1,4 @@
-FROM mvance/unbound:1.19.3
+FROM mvance/unbound:1.20.0
 
 COPY entrypoint.sh /
 RUN chmod +x /entrypoint.sh
