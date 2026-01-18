@@ -1,5 +1,5 @@
 # traefik.toml
-# Configuration for Traefik v2
+# Configuration for Traefik v3
 
 ################################################################
 # Global configuration
@@ -87,7 +87,6 @@
     watch = true
     exposedByDefault = false
     defaultRule = "Host(`{{ normalize .Name }}.{{ env \"BASE_DNS_NAME\" }}`)"
-    swarmMode = false
     network = "web"
 
   [providers.file]
