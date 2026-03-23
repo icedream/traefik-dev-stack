@@ -1,4 +1,4 @@
-FROM smallstep/step-ca:0.29.0
+FROM smallstep/step-ca:0.30.2
 
 USER root
 
